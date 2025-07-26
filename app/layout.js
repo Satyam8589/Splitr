@@ -5,6 +5,7 @@ import React from "react";
 import { ConvexClientProvider } from "@/components/convex-client-provider";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "react-hot-toast";
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
               <Toaster richColors />
 
               {children}
+              <SpeedInsights/>
               <Toaster richColors />
             </main>
           </ConvexClientProvider>
