@@ -1,3 +1,4 @@
+// Fixed Inngest configuration for production
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
 import { paymentReminders } from "@/lib/inngest/payment-reminders";
