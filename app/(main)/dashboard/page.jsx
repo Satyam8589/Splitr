@@ -191,6 +191,15 @@ export default function Dashboard() {
               </Card>
             </div>
           </div>
+          {/* PWA Debug Link - Remove in production */}
+          <div className="mt-6 text-center">
+            <Link
+              href="/pwa-test"
+              className="text-xs text-gray-400 hover:underline"
+            >
+              PWA Installation Debug
+            </Link>
+          </div>
         </>
       )}
     </div>

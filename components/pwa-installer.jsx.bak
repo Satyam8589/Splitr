@@ -1,0 +1,224 @@
+'use client';
+
+// PWA installer has been disabled to prevent hydration errors
+import dynamic from 'next/dynamic';
+
+// This component is completely client-side only with no SSR
+const PWAInstallContent = () => {
+  // Return null to render nothing
+  return null;
+
+  useEffect(() => {
+    // Check if we're already in PWA mode
+    const checkStandalone = () => {
+      return window.matchMedia?.('(display-mode: standalone)')?.matches || 
+        window.navigator?.standalone === true;
+    };
+    
+    if (checkStandalone()) {
+      setIsInstalled(true);
+      return;
+    }
+    
+    // Check if user recently dismissed the prompt
+    try {
+      const lastDismissed = localStorage.getItem('pwa-prompt-dismissed');
+      if (lastDismissed) {
+        const dismissedTime = parseInt(lastDismissed, 10);
+        const now = Date.now();
+        // If dismissed within the last 24 hours, don't show the prompt
+        if (now - dismissedTime < 24 * 60 * 60 * 1000) {
+          setShowPrompt(false);
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+    
+    // Store beforeinstallprompt event
+    if (typeof window !== 'undefined') {
+      // Check if there's already a stored prompt
+      if (window.deferredPrompt) {
+        setDeferredPrompt(window.deferredPrompt);
+        setIsInstallable(true);
+      }
+      
+      // Handle app installation prompt
+      const handleBeforeInstallPrompt = (e) => {
+        // Prevent Chrome 67+ from automatically showing the prompt
+        e.preventDefault();
+        
+        // Store the event globally so other components can access it
+        window.deferredPrompt = e;
+        
+        // Also store it in state
+        setDeferredPrompt(e);
+        setIsInstallable(true);
+        
+        console.log('beforeinstallprompt fired and captured!');
+      };
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      
+      // Handle successful installation
+      const handleAppInstalled = () => {
+        window.deferredPrompt = null;
+        setDeferredPrompt(null);
+        setIsInstalled(true);
+        setIsInstallable(false);
+        toast.success('Splitr has been installed successfully!');
+        console.log('PWA was installed');
+      };
+
+      window.addEventListener('appinstalled', handleAppInstalled);
+      
+      // Check periodically for standalone mode
+      const checkInterval = setInterval(() => {
+        if (checkStandalone()) {
+          setIsInstalled(true);
+          clearInterval(checkInterval);
+        }
+      }, 2000);
+      
+      // Show the prompt after some user engagement (10 seconds on page)
+      // but only if it was dismissed more than 24 hours ago
+      const promptTimer = setTimeout(() => {
+        try {
+          const lastDismissed = localStorage.getItem('pwa-prompt-dismissed');
+          if (!lastDismissed || (Date.now() - parseInt(lastDismissed, 10) >= 24 * 60 * 60 * 1000)) {
+            setShowPrompt(true);
+          }
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }, 10000);
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+        clearInterval(checkInterval);
+        clearTimeout(promptTimer);
+      };
+    }
+  }, []);
+  
+  const handleInstallClick = async () => {
+    // Use either the component state or global window object
+    const promptEvent = deferredPrompt || window.deferredPrompt;
+    
+    if (!promptEvent) {
+      // For debugging - show why we can't install
+      console.log('Cannot install because prompt event is null');
+      toast.error('Installation not available');
+      
+      if (showDebug) {
+        toast('Check if:');
+        toast('1. The app is already installed');
+        toast('2. You\'re using a supported browser (Chrome/Edge)');
+        toast('3. You\'re on HTTPS or localhost');
+        toast('4. You\'ve interacted with the page');
+        toast('Visit /pwa-test for detailed diagnostics');
+      } else {
+        toast('Visit /pwa-test for diagnostic tools');
+      }
+      return;
+    }
+
+    try {
+      // Show the install prompt
+      promptEvent.prompt();
+
+      // Wait for the user to respond to the prompt
+      const { outcome } = await promptEvent.userChoice;
+      
+      // We no longer need the prompt
+      window.deferredPrompt = null;
+      setDeferredPrompt(null);
+
+      if (outcome === 'accepted') {
+        setIsInstallable(false);
+        toast.success('Installation started!');
+      } else {
+        toast.error('Installation declined');
+      }
+    } catch (e) {
+      console.error('Installation error:', e);
+      toast.error('Installation failed');
+    }
+  };
+
+  // Don't show the component if:
+  // 1. It's already installed as a PWA
+  // 2. User clicked "Not now" (showPrompt is false)
+  if (isInstalled || !showPrompt) {
+    return null;
+  }
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-700">
+        <div className="flex-shrink-0">
+          <img src="/logos/logo-s.png" alt="Splitr" className="w-12 h-12" />
+        </div>
+        <div className="flex-grow">
+          <h3 className="font-medium text-sm">Install Splitr</h3>
+          <p className="text-xs text-gray-600 dark:text-gray-300">Add to your home screen for quick access</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleInstallClick}
+              className={`px-3 py-1 text-white text-xs rounded-md transition-colors ${isInstallable 
+                ? "bg-green-600 hover:bg-green-700" 
+                : "bg-gray-400 cursor-not-allowed"}`}
+            >
+              Install App
+            </button>
+            <button
+              onClick={() => {
+                setShowDebug(!showDebug);
+                // If not installable, show guidance
+                if (!isInstallable) {
+                  window.location.href = '/pwa-test';
+                }
+              }}
+              className="px-3 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 transition-colors"
+            >
+              Diagnostic
+            </button>
+            <button
+              onClick={() => {
+                // Hide the prompt when "Not now" is clicked
+                setShowPrompt(false);
+                // Store in localStorage to remember user preference
+                try {
+                  localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+                } catch (e) {
+                  // Handle localStorage errors silently
+                }
+              }}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+          {showDebug && (
+            <div className="mt-2 text-xs text-gray-500">
+              <p>Install available: {isInstallable ? 'Yes ✅' : 'No ❌'}</p>
+              <p>
+                <a href="/pwa-test" className="text-blue-500 underline">
+                  Open diagnostic page
+                </a>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Use Next.js dynamic import to completely avoid SSR for this component
+const PWAInstallComponent = dynamic(() => Promise.resolve(PWAInstallContent), {
+  ssr: false, // Never render on the server
+});
+
+export default PWAInstallComponent;
